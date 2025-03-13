@@ -1,0 +1,13 @@
+# Blender 4.3.0 MTL File: 'None'
+# www.blender.org
+
+newmtl minimi
+Ns 319.999939
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd -o 0 -1 0 C:/Users/fnqui/Projects/Facility22/tex/minimiColor.png
+map_Bump -o 0 -1 0 -bm 1.000000 C:/Users/fnqui/Projects/Facility22/tex/minimiNormal.png
