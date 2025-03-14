@@ -19,11 +19,13 @@ brick_texture = load_texture('assets/brick_block.png')
 dirt_texture = load_texture('assets/dirt_block.png')
 sky_texture = load_texture('assets/skybox.png')
 arm_texture = load_texture('assets/arm_texture.png')
-player = FirstPersonController(position=Vec3(0, 1, 0))  # Spawn at the center
+player = FirstPersonController(position=Vec3(0, 3, 0))
+player.collider = BoxCollider(entity=player, center=Vec3(0, 1, 0), size=Vec3(1, 2, 1))
+  # Spawn at the center
 
 window.fps_counter.color = color.green
 RENDER_DISTANCE = 15  # the number is how many blocks are visible
-
+pl = Entity(model='plane', scale=200, position=Vec3(0, 0, 0), collider='mesh', texture=grass_texture)
 key_pressed_up = False
 key_pressed_down = False
 DEFAULT_FOV = 60
@@ -52,18 +54,18 @@ class Sky(Entity):
         super().__init__(parent=scene,
                          model='sphere',
                          texture=sky_texture,
-                         scale=250,
+                         scale=550,
                          double_sided=True)
 
 class Weapon(Entity):
-    def __init__(self, pos, rot, aimSpeed, scale, aimpos):
+    def __init__(self, pos, rot, aimSpeed, scale, aimpos,model):
         self.original_position = pos
         self.aimpos = aimpos
         self.aimSpeed = aimSpeed
 
         super().__init__(
             parent=camera,  # Parent it to the camera to follow its movement
-            model='assets/pistol1',
+            model=model,
             texture=arm_texture,
             scale=scale,
             rotation=rot,  # Apply rotation in 3D space
@@ -85,17 +87,22 @@ class Weapon(Entity):
     def start_fire(self):
         self.last_shot_time = time.time()  # Set last shot time to current time
         print("Fired")
-        shoot()
+        self.shoot()
 
         bullet_direction = camera.forward
-        bullet_position = hand.world_position + Vec3(0, 0.1, 0)
+        bullet_position = self.world_position + Vec3(0, 0.1, 0)
 
         # Raycast and check if an enemy is hit
         ray_distance = 100
         hit_info = raycast(bullet_position, bullet_direction, ray_distance)
         if isinstance(hit_info.entity, Enemy):
             hit_info.entity.on_collision()
+    def shoot(self):
+        self.animate_rotation(Vec3(-3.5, 0, 0), 0.01)
+        invoke(self.idle, delay=0.075)
 
+    def idle(self):
+        self.animate_rotation(Vec3(0, 0, 0), 0.15)
     def update(self):
         # Handle cooldown by checking the current time against the last shot time
         if self.last_shot_time > 0 and time.time() - self.last_shot_time >= self.cooldown_time:
@@ -115,8 +122,12 @@ class Weapon(Entity):
         if held_keys['right mouse']:
             self.rotation = lerp(self.rotation, camera.rotation, self.aimSpeed * time.dt)
 
-hand = Weapon(Vec3(0.1, -0.2, 0.65), Vec3(0, 0, 0), 9, 0.12, Vec3(0, -0.16, 0.75))
-print(f"Children of {hand.name}: {hand.children}")
+weapons = [
+    Weapon(Vec3(0.1, -0.2, 0.65), Vec3(0, 0, 0), 9, 0.12, Vec3(0, -0.16, 0.75),model = 'assets/pistol1'),
+    Weapon(Vec3(0.15, -0.22, 0.5), Vec3(0, 0, 0), 9, 0.25, Vec3(0, -0.173, 0.3),model = 'assets/LMG')
+]
+
+
 
 class Enemy(Entity):
     def __init__(self, position):
@@ -125,10 +136,12 @@ class Enemy(Entity):
                                  random.randint(0, 255) / 255)
         super().__init__(parent=scene,
                          model='cube',
+                         collider = 'mesh',
                          color=color.red,
                          texture=grass_texture,
                          position=position,
                          scale=(1, 2, 1))
+                         
         self.collider = BoxCollider(entity=self, center=Vec3(0, 0, 0))
         self.speed = 1.65  # Movement speed towards the player
         self.falling = False
@@ -155,11 +168,11 @@ class Enemy(Entity):
     def on_collision(self):
         if not self.falling:
             self.falling = True
-            self.animate_rotation(Vec3(self.rotation.x, self.rotation.y, 90), duration=0.23, curve=curve.linear)
-            self.animate_position(Vec3(self.position.x,.25,self.position.z), duration=0.23, curve=curve.linear)
+            self.animate_rotation(Vec3(self.rotation.x, self.rotation.y, 90), duration=0.15, curve=curve.linear)
+            self.animate_position(Vec3(self.position.x,.25,self.position.z), duration=0.15, curve=curve.linear)
 
 
-            invoke(self.flash_effect, delay=0.23)  # Start flashing after falling
+            invoke(self.flash_effect, delay=0.15)  # Start flashing after falling
 
     def flash_effect(self):
         flash_sequence = Sequence(
@@ -223,17 +236,60 @@ def spawn_enemies(num_enemies, spawn_area=(25, 25)):
 
 # Timer text for countdown between rounds.
 timer_text = Text(text='', position=(0, 0.4), origin=(0, 0), scale=2, color=color.white)
+enemyLabel = Text(text='Dont Hug the Red Guys', position=(0.05, -0.4), origin=(0, 0), scale=2, color=color.red)
 timer_text.enabled = False
 round_timer = None  # Global variable to track the countdown
 
 # Initial enemy spawn if desired.
 
+death_Bool = False
+def check_collision_and_restart():
+    for entity in scene.entities:
+        if isinstance(entity, Enemy):
+            if player.intersects(entity):  # Check for collision with an enemy
+                # Handle player death
+                player_death()  # Call the player death function
 
-pl = Entity(model='plane', scale=55, position=Vec3(0, 0, 0), collider='mesh', texture='white_cube')
+def player_death():
+    # You can show a game over screen, play a death animation, or simply restart the game.
+    global death_Bool
+    if death_Bool == False:
+    # Disable player movement and interaction
+        death_Bool = True
+        player.enabled = False
+        death = Entity(model = 'quad',parent = camera.ui,color = color.black,scale = Vec3(10,10,10))
+        camera.enabled = False
+    
+    
+    # Optionally, show a death screen or animation
+        death_screen = Text(text="GAME OVER", position=(-.3, 0), scale=4, color=color.red)
+        s = Sequence(
+            Wait(2.5),
+            Func(setattr, death_screen, 'text', 'Close this Window'),
+            Func(setattr, death_screen, 'position', Vec3(-.45,0,0)),
+            Wait(2),
+            
+              # Ensure it's callable with Func
+        )
+        s.start()
+        
+        
+    
+    # Wait for 2 seconds and then restart the game
+   
+    
 
 def update():
+    
     global toggle, round_timer
-
+    check_collision_and_restart()
+        
+    if held_keys['1']:
+        weapons[0].enabled = True
+        weapons[1].enabled = False
+    if held_keys['2']:
+        weapons[1].enabled = True
+        weapons[0].enabled = False
     # Adjust player speed.
     if held_keys['left shift']:
         player.speed = sprint_speed
@@ -270,6 +326,7 @@ def update():
         voxel.update_visibility()
 
     # Check enemy count and handle round timer.
+    global num_enemies
     enemy_count = sum(1 for entity in scene.entities if isinstance(entity, Enemy))
     if enemy_count <= 0:
         # Start the round timer if it hasn't started yet.
@@ -280,16 +337,13 @@ def update():
             round_timer -= time.dt
             timer_text.text = f'Next round in: {round_timer:.1f}s'
             if round_timer <= 0:
-                timer_text.enabled = False
+                timer_text.enabled = False 
                 spawn_enemies(num_enemies, spawn_area)
                 round_timer = None
+                if num_enemies < 45:
+                    num_enemies += 5
 
-def shoot():
-    hand.animate_rotation(Vec3(-3.5, 0, 0), 0.01)
-    invoke(idle, delay=0.075)
 
-def idle():
-    hand.animate_rotation(Vec3(0, 0, 0), 0.15)
 
 # Create voxels (the environment).
 voxels = {}
@@ -304,5 +358,7 @@ def Run_voxels():
                 elif y >= 2:
                     voxel = Voxel(position=(x, -y, z), texture=stone_texture)
                     voxels[(x, -y, z)] = voxel
-
+weapons[0].enabled = True
+weapons[1].enabled = False
 app.run()
+
