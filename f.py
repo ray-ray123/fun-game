@@ -19,7 +19,8 @@ brick_texture = load_texture('assets/brick_block.png')
 dirt_texture = load_texture('assets/dirt_block.png')
 sky_texture = load_texture('assets/skybox.png')
 arm_texture = load_texture('assets/arm_texture.png')
-player = FirstPersonController()
+player = FirstPersonController(position=Vec3(0, 1, 0))  # Spawn at the center
+
 window.fps_counter.color = color.green
 RENDER_DISTANCE = 15  # the number is how many blocks are visible
 
@@ -120,16 +121,17 @@ print(f"Children of {hand.name}: {hand.children}")
 class Enemy(Entity):
     def __init__(self, position):
         random_color = color.rgb(random.randint(0, 255) / 255, 
-                                   random.randint(0, 255) / 255, 
-                                   random.randint(0, 255) / 255)
+                                 random.randint(0, 255) / 255, 
+                                 random.randint(0, 255) / 255)
         super().__init__(parent=scene,
                          model='cube',
                          color=color.red,
-                         texture = grass_texture,
+                         texture=grass_texture,
                          position=position,
                          scale=(1, 2, 1))
         self.collider = BoxCollider(entity=self, center=Vec3(0, 0, 0))
         self.speed = 1.65  # Movement speed towards the player
+        self.falling = False
 
     def avoid_overlap(self):
         for entity in scene.entities:
@@ -139,18 +141,40 @@ class Enemy(Entity):
                     self.position.z += random.uniform(-1, 1)
 
     def update(self):
-        self.avoid_overlap()
-        direction = Vec3(player.position.x - self.position.x, 0, player.position.z - self.position.z)
-        distance_to_player = direction.length()
+        if not self.falling:
+            self.avoid_overlap()
+            direction = Vec3(player.position.x - self.position.x, 0, player.position.z - self.position.z)
+            distance_to_player = direction.length()
 
-        if distance_to_player > 0:
-            target_rotation = Vec3(0, atan2(direction.x, direction.z) * (180 / pi), 0)
-            self.rotation_y = lerp(self.rotation_y, target_rotation.y, 5 * time.dt)
-            direction = direction.normalized()
-            self.position += direction * self.speed * time.dt
+            if distance_to_player > 0:
+                target_rotation = Vec3(0, atan2(direction.x, direction.z) * (180 / pi), 0)
+                self.rotation_y = lerp(self.rotation_y, target_rotation.y, 5 * time.dt)
+                direction = direction.normalized()
+                self.position += direction * self.speed * time.dt
 
     def on_collision(self):
-        destroy(self)  
+        if not self.falling:
+            self.falling = True
+            self.animate_rotation(Vec3(self.rotation.x, self.rotation.y, 90), duration=0.23, curve=curve.linear)
+            self.animate_position(Vec3(self.position.x,.25,self.position.z), duration=0.23, curve=curve.linear)
+
+
+            invoke(self.flash_effect, delay=0.23)  # Start flashing after falling
+
+    def flash_effect(self):
+        flash_sequence = Sequence(
+            Func(self.set_color, color.white),
+            Wait(0.1),
+            Func(self.set_color, color.red),
+            Wait(0.1),
+            Func(self.set_color, color.white),
+            Wait(0.1),
+            Func(destroy, self)
+        )
+        flash_sequence.start()
+
+    def set_color(self, new_color):
+        self.color = new_color
 
 class Bullet(Entity):
     def __init__(self, position, direction):
@@ -185,7 +209,7 @@ num_enemies = 15  # Number of enemies to spawn per round
 spawn_area = (25, 25)
 
 def spawn_enemies(num_enemies, spawn_area=(25, 25)):
-    min_spawn_distance = 15  # Do not spawn an enemy if closer than this distance to the player.
+    min_spawn_distance = 25  # Do not spawn an enemy if closer than this distance to the player.
     spawned = 0
     while spawned < num_enemies:
         x = random.randint(-spawn_area[0], spawn_area[0])
@@ -203,7 +227,7 @@ timer_text.enabled = False
 round_timer = None  # Global variable to track the countdown
 
 # Initial enemy spawn if desired.
-spawn_enemies(num_enemies, spawn_area)
+
 
 pl = Entity(model='plane', scale=55, position=Vec3(0, 0, 0), collider='mesh', texture='white_cube')
 
